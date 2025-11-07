@@ -1,105 +1,284 @@
-# ui_helpers.py
-# Alle kleine functies voor invoer, keuzes en vensters.
+# ui_helpers.py - Improved UI with colors and better layout
+import tkinter as tk
+from tkinter import font
+import sys
 
-import tkinter
-from tkinter import messagebox, simpledialog
-from player import *
+_app = None
+
+
+class App:
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.title("⚔️ Adventure Game")
+        self.root.geometry("700x500")
+        self.root.configure(bg="#1a1a2e")
+
+        try:
+            self.root.attributes("-topmost", True)
+            self.root.after(200, lambda: self.root.attributes("-topmost", False))
+        except Exception:
+            pass
+
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+
+        # Custom fonts
+        self.title_font = font.Font(family="Arial", size=16, weight="bold")
+        self.text_font = font.Font(family="Arial", size=11)
+        self.hud_font = font.Font(family="Consolas", size=10)
+
+        # HUD Frame with gradient
+        self.hud_frame = tk.Frame(self.root, bg="#16213e", height=50)
+        self.hud_frame.pack(fill="x", padx=0, pady=0)
+        self.hud_frame.pack_propagate(False)
+
+        self.hud = tk.Label(
+            self.hud_frame,
+            text="—",
+            font=self.hud_font,
+            bg="#16213e",
+            fg="#00d9ff",
+            anchor="w",
+            padx=15,
+            pady=10
+        )
+        self.hud.pack(fill="both", expand=True)
+
+        # Main content frame
+        self.content_frame = tk.Frame(self.root, bg="#1a1a2e")
+        self.content_frame.pack(fill="both", expand=True, padx=20, pady=15)
+
+        # Title
+        self.title_lbl = tk.Label(
+            self.content_frame,
+            text="",
+            font=self.title_font,
+            bg="#1a1a2e",
+            fg="#f39c12",
+            wraplength=640
+        )
+        self.title_lbl.pack(pady=(5, 10))
+
+        # Text
+        self.text_lbl = tk.Label(
+            self.content_frame,
+            text="",
+            font=self.text_font,
+            bg="#1a1a2e",
+            fg="#ecf0f1",
+            wraplength=640,
+            justify="left"
+        )
+        self.text_lbl.pack(pady=(0, 15))
+
+        # Buttons area
+        self.btn_frame = tk.Frame(self.content_frame, bg="#1a1a2e")
+        self.btn_frame.pack(pady=10)
+
+        self._choice_var = tk.StringVar()
+        self._current_widgets = []
+
+        # Keyboard shortcuts
+        for i in range(1, 6):
+            self.root.bind(str(i), lambda e, idx=i - 1: self._press_index(idx))
+
+    def _on_close(self):
+        c = self.yes_no("Quit Game", "Are you sure you want to leave the adventure?")
+        if c:
+            try:
+                self.root.destroy()
+            finally:
+                sys.exit(0)
+
+    def _clear_widgets(self):
+        """Properly clear all widgets"""
+        for w in self._current_widgets:
+            w.destroy()
+        self._current_widgets.clear()
+
+    def _press_index(self, idx):
+        if 0 <= idx < len(self._current_widgets):
+            # Check if it's a button
+            if isinstance(self._current_widgets[idx], tk.Button):
+                self._current_widgets[idx].invoke()
+
+    def update_hud(self, *, name, klass, hp, max_hp, xp):
+        hp_color = "#2ecc71" if hp > max_hp * 0.5 else "#e74c3c" if hp <= max_hp * 0.3 else "#f39c12"
+        self.hud.config(
+            text=f"👤 {name or '-'}   |   🎭 {klass or '-'}   |   ❤️ {hp}/{max_hp}   |   ⭐ {xp} XP",
+            fg=hp_color if hp <= max_hp * 0.5 else "#00d9ff"
+        )
+
+    def message(self, title, text):
+        self.title_lbl.config(text=title)
+        self.text_lbl.config(text=text)
+        self._clear_widgets()
+
+        btn = tk.Button(
+            self.btn_frame,
+            text="✓ OK",
+            width=40,
+            height=2,
+            font=self.text_font,
+            bg="#27ae60",
+            fg="white",
+            activebackground="#229954",
+            activeforeground="white",
+            relief="flat",
+            cursor="hand2",
+            command=lambda: self._set_choice("__ok__")
+        )
+        btn.pack(pady=5)
+        self._current_widgets.append(btn)
+
+        self._choice_var.set("")
+        self.root.update()
+        self.root.wait_variable(self._choice_var)
+
+    def choice(self, title, text, options):
+        self.title_lbl.config(text=title)
+        self.text_lbl.config(text=text)
+        self._clear_widgets()
+
+        colors = ["#3498db", "#9b59b6", "#e67e22", "#16a085", "#c0392b"]
+
+        for i, opt in enumerate(options):
+            color = colors[i % len(colors)]
+            label = f"{i + 1}. {opt}"
+
+            btn = tk.Button(
+                self.btn_frame,
+                text=label,
+                width=40,
+                height=2,
+                font=self.text_font,
+                bg=color,
+                fg="white",
+                activebackground=self._darken_color(color),
+                activeforeground="white",
+                relief="flat",
+                cursor="hand2",
+                command=lambda o=opt: self._set_choice(o)
+            )
+            btn.pack(pady=4)
+            self._current_widgets.append(btn)
+
+        self._choice_var.set("")
+        self.root.update()
+        self.root.wait_variable(self._choice_var)
+        return self._choice_var.get()
+
+    def ask_text(self, title, prompt, default=""):
+        self.title_lbl.config(text=title)
+        self.text_lbl.config(text=prompt)
+        self._clear_widgets()
+
+        # Entry frame
+        entry_frame = tk.Frame(self.btn_frame, bg="#1a1a2e")
+        entry_frame.pack(pady=(5, 10))
+        self._current_widgets.append(entry_frame)
+
+        entry = tk.Entry(
+            entry_frame,
+            width=45,
+            font=self.text_font,
+            bg="#2c3e50",
+            fg="white",
+            insertbackground="white",
+            relief="flat",
+            bd=5
+        )
+        entry.insert(0, default or "")
+        entry.pack(pady=5)
+
+        out = {"val": ""}
+
+        def ok():
+            out["val"] = entry.get().strip()
+            self._set_choice("__ok__")
+
+        entry.bind("<Return>", lambda e: ok())
+
+        btn = tk.Button(
+            self.btn_frame,
+            text="✓ Confirm",
+            width=40,
+            height=2,
+            font=self.text_font,
+            bg="#27ae60",
+            fg="white",
+            activebackground="#229954",
+            activeforeground="white",
+            relief="flat",
+            cursor="hand2",
+            command=ok
+        )
+        btn.pack(pady=5)
+        self._current_widgets.append(btn)
+
+        self._choice_var.set("")
+        self.root.update()
+        entry.focus_set()
+        self.root.wait_variable(self._choice_var)
+        return out["val"]
+
+    def yes_no(self, title, text):
+        c = self.choice(title, text, ["Yes", "No"])
+        return c == "Yes"
+
+    def _set_choice(self, value):
+        self._choice_var.set(value)
+
+    def _darken_color(self, color):
+        """Darken a hex color by 20%"""
+        color = color.lstrip('#')
+        rgb = tuple(int(color[i:i + 2], 16) for i in (0, 2, 4))
+        darker = tuple(int(c * 0.8) for c in rgb)
+        return '#' + ''.join(f'{c:02x}' for c in darker)
+
+
+# Public API
+def ui_init():
+    global _app
+    if _app is None:
+        _app = App()
+    return _app
+
+
+def ui_update_hud(name, klass, hp, max_hp, xp):
+    ui_init().update_hud(name=name, klass=klass, hp=hp, max_hp=max_hp, xp=xp)
+
+
+def alert(title, text):
+    ui_init().message(title, text)
+
+
+def ask_choice(title, question, options):
+    return ui_init().choice(title, question, options)
+
+
+def ask_text(title, prompt, default=""):
+    return ui_init().ask_text(title, prompt, default)
+
 
 def welcome_popup():
-    root = tkinter.Tk()
-    root.withdraw()
-    choice = messagebox.askquestion(
-        "Welcome",
-        "🎮 Welcome to the Adventure Text-Based Game!\n\n"
-        "You wake up in a strange place... "
-        "Your choices will decide your fate.\n\n"
-        "Do you have the courage to continue?"
+    start = ui_init().yes_no(
+        "🎮 Welcome to the Adventure!",
+        "Embark on an epic journey filled with danger and treasure.\n\nAre you ready to begin your adventure?"
     )
-    if choice != "yes":
-        print("You turn back before the journey even begins...")
-        return False
-    root.destroy()
-    return True
+    if start:
+        return True
 
+    again = ui_init().choice(
+        "Not Ready?",
+        "Are you sure you don't want to start?\nThe adventure awaits...",
+        ["Start Adventure", "Quit Game"]
+    )
+    if again == "Start Adventure":
+        return True
 
-def ask_name():
-    global player_name
-    root = tkinter.Tk()
-    root.withdraw()
-    name = simpledialog.askstring("Character Creation", "What is your name, adventurer?")
-    player_name = name if name else "Unknown Hero"
-    root.destroy()
-
-
-def choose_class():
-    global player_class, player_health, player_max_health, player_strength, player_armor, player_dodge, player_attack
-
-    root = tkinter.Tk()
-    root.withdraw()
-    win = tkinter.Toplevel()
-    win.title("Choose Your Class")
-    win.geometry("400x300")
-
-    tkinter.Label(win, text="Choose Your Class:", font=("Arial", 14, "bold")).pack(pady=10)
-    tkinter.Label(win, text="⚔️ Warrior - High armor and health, strong attacks", font=("Arial", 10)).pack(pady=5)
-    tkinter.Label(win, text="🔮 Mage - Powerful magic, low defense", font=("Arial", 10)).pack(pady=5)
-    tkinter.Label(win, text="🗡️ Rogue - High dodge, balanced stats", font=("Arial", 10)).pack(pady=5)
-
-    def set_stats(klass, hp, max_hp, str_, arm, ddg, atk):
-        global player_class, player_health, player_max_health, player_strength, player_armor, player_dodge, player_attack
-        player_class = klass
-        player_health = hp
-        player_max_health = max_hp
-        player_strength = str_
-        player_armor = arm
-        player_dodge = ddg
-        player_attack = atk
-
-    def select_warrior():
-        set_stats("Warrior", hp=12, max_hp=12, str_=15, arm=20, ddg=5, atk=10)
-        win.destroy()
-
-    def select_mage():
-        set_stats("Mage", hp=8, max_hp=8, str_=8, arm=5, ddg=10, atk=20)
-        win.destroy()
-
-    def select_rogue():
-        set_stats("Rogue", hp=10, max_hp=10, str_=12, arm=10, ddg=20, atk=15)
-        win.destroy()
-
-    tkinter.Button(win, text="Warrior", width=15, bg="#8B0000", fg="white", command=select_warrior).pack(pady=5)
-    tkinter.Button(win, text="Mage", width=15, bg="#4B0082", fg="white", command=select_mage).pack(pady=5)
-    tkinter.Button(win, text="Rogue", width=15, bg="#2F4F2F", fg="white", command=select_rogue).pack(pady=5)
-
-    win.wait_window()
-    root.destroy()
-
-
-def ask_origin():
-    global player_origin
-    root = tkinter.Tk()
-    root.withdraw()
-    origin = simpledialog.askstring("Character Origin", "Where do you come from?\n(e.g., Village, Mountains, City)")
-    player_origin = origin if origin else "Unknown Lands"
-    root.destroy()
-
-
-def show_stats():
-    root = tkinter.Tk()
-    root.withdraw()
-    stats_text = f"""
-📊 Character Stats:
-
-Name: {player_name}
-Class: {player_class}
-Origin: {player_origin}
-
-❤️ Health: {player_health}/{player_max_health}
-💪 Strength: {player_strength}
-🛡️ Armor: {player_armor}
-🏃 Dodge: {player_dodge}
-⚔️ Attack: {player_attack}
-⭐ Experience: {player_experience}
-"""
-    messagebox.showinfo("Your Character", stats_text)
-    root.destroy()
+    last = ui_init().choice(
+        "Final Chance",
+        "This is your last chance! Epic battles and treasures are waiting.\n\nWhat will it be?",
+        ["Fine, I'll Start!", "I'm Out"]
+    )
+    return last == "Fine, I'll Start!"
